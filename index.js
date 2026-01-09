@@ -44,6 +44,11 @@ async function sendToUser(userId, title, body, screen, type = 'GENERAL') {
 
   const message = {
     notification: { title, body },
+    android: {
+      notification: {
+        channelId: 'high_importance_channel' // must match Flutter
+      }
+    },
     data: { screen, type },
     tokens,
   };
