@@ -6,7 +6,7 @@ const cron = require('node-cron');
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+  credential: admin.credential.cert(serviceAccount),
 });
 
 const app = express();
@@ -22,11 +22,14 @@ app.post('/register-token', async (req, res) => {
   }
 
   try {
-    await admin.firestore().collection('users').doc(userId).set({
-      fcmTokens: admin.firestore.FieldValue.arrayUnion(token),
-      role: role || 'unknown',
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    await admin.firestore().collection('users').doc(userId).set(
+      {
+        fcmTokens: admin.firestore.FieldValue.arrayUnion(token),
+        role: role || 'unknown',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
 
     res.send('Token registered successfully');
   } catch (error) {
@@ -35,7 +38,7 @@ app.post('/register-token', async (req, res) => {
   }
 });
 
-// ======== SEND TO SINGLE USER ========
+// ======== SEND TO SINGLE USER (DATA-ONLY) ========
 async function sendToUser(userId, title, body, screen, type = 'GENERAL') {
   const userDoc = await admin.firestore().collection('users').doc(userId).get();
   const tokens = userDoc.data()?.fcmTokens || [];
@@ -43,13 +46,15 @@ async function sendToUser(userId, title, body, screen, type = 'GENERAL') {
   if (!tokens.length) return;
 
   const message = {
-    notification: { title, body },
-    android: {
-      notification: {
-        channelId: 'high_importance_channel' // must match Flutter
-      }
+    data: {
+      title: String(title),
+      body: String(body),
+      screen: String(screen),
+      type: String(type),
     },
-    data: { screen, type },
+    android: {
+      priority: 'high',
+    },
     tokens,
   };
 
@@ -61,17 +66,24 @@ async function sendToUser(userId, title, body, screen, type = 'GENERAL') {
   }
 }
 
-// ======== SEND TO TOPIC ========
+// ======== SEND TO TOPIC (DATA-ONLY) ========
 async function sendToTopic(topic, title, body, screen, type = 'GENERAL') {
   const message = {
-    notification: { title, body },
-    data: { screen, type },
+    data: {
+      title: String(title),
+      body: String(body),
+      screen: String(screen),
+      type: String(type),
+    },
+    android: {
+      priority: 'high',
+    },
     topic,
   };
 
   try {
     const response = await admin.messaging().send(message);
-    console.log(`Notification sent to topic ${topic}:`, response);
+    console.log(`Notification sent to topic ${topic}`);
   } catch (err) {
     console.error('Error sending topic notification:', err);
   }
@@ -84,35 +96,41 @@ async function sendToUsers(userIds, title, body, screen, type = 'GENERAL') {
   }
 }
 
-// ======== API: SEND NOTIFICATION TO SINGLE USER ========
+// ======== API ENDPOINTS ========
 app.post('/send-to-user', async (req, res) => {
   const { userId, title, body, screen, type } = req.body;
   if (!userId || !title || !body) return res.status(400).send('Missing fields');
+
   await sendToUser(userId, title, body, screen || 'HomeScreen', type);
   res.send('Notification sent to user');
 });
 
-// ======== API: SEND NOTIFICATION TO TOPIC ========
 app.post('/send-to-topic', async (req, res) => {
   const { topic, title, body, screen, type } = req.body;
   if (!topic || !title || !body) return res.status(400).send('Missing fields');
+
   await sendToTopic(topic, title, body, screen || 'HomeScreen', type);
   res.send('Notification sent to topic');
 });
 
-// ======== API: SEND NOTIFICATION TO MULTIPLE USERS ========
 app.post('/send-to-users', async (req, res) => {
   const { userIds, title, body, screen, type } = req.body;
   if (!userIds || !title || !body) return res.status(400).send('Missing fields');
+
   await sendToUsers(userIds, title, body, screen || 'HomeScreen', type);
   res.send('Notification sent to multiple users');
 });
 
-// ======== SCHEDULED / REMINDER NOTIFICATIONS ========
-// Example: daily at 9:00 AM UTC
+// ======== CRON JOB ========
 cron.schedule('0 9 * * *', async () => {
-  console.log('Sending daily reminder to all freelancers...');
-  await sendToTopic('freelancers', 'Good Morning!', 'Check your daily updates', 'HomeScreen', 'DAILY_REMINDER');
+  console.log('Sending daily reminder...');
+  await sendToTopic(
+    'freelancers',
+    'Good Morning!',
+    'Check your daily updates',
+    'HomeScreen',
+    'DAILY_REMINDER'
+  );
 });
 
 app.listen(PORT, () => {
