@@ -38,7 +38,7 @@ app.post('/register-token', async (req, res) => {
   }
 });
 
-// ======== SEND TO SINGLE USER (DATA-ONLY) ========
+// ======== SEND TO SINGLE USER ========
 async function sendToUser(userId, title, body, screen, type = 'GENERAL') {
   const userDoc = await admin.firestore().collection('users').doc(userId).get();
   const tokens = userDoc.data()?.fcmTokens || [];
@@ -46,6 +46,10 @@ async function sendToUser(userId, title, body, screen, type = 'GENERAL') {
   if (!tokens.length) return;
 
   const message = {
+    notification: {
+      title: String(title),
+      body: String(body),
+    },
     data: {
       title: String(title),
       body: String(body),
@@ -54,6 +58,10 @@ async function sendToUser(userId, title, body, screen, type = 'GENERAL') {
     },
     android: {
       priority: 'high',
+      notification: {
+        sound: 'default',
+        vibrationPattern: [0, 250, 250, 250],
+      },
     },
     tokens,
   };
@@ -66,9 +74,13 @@ async function sendToUser(userId, title, body, screen, type = 'GENERAL') {
   }
 }
 
-// ======== SEND TO TOPIC (DATA-ONLY) ========
+// ======== SEND TO TOPIC ========
 async function sendToTopic(topic, title, body, screen, type = 'GENERAL') {
   const message = {
+    notification: {
+      title: String(title),
+      body: String(body),
+    },
     data: {
       title: String(title),
       body: String(body),
@@ -77,6 +89,10 @@ async function sendToTopic(topic, title, body, screen, type = 'GENERAL') {
     },
     android: {
       priority: 'high',
+      notification: {
+        sound: 'default',
+        vibrationPattern: [0, 250, 250, 250],
+      },
     },
     topic,
   };
